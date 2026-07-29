@@ -61,13 +61,22 @@ jobs:
       - name: Verify package source and lock line endings
         shell: powershell
         run: |
-          $files = @(git ls-files -- '*.phy' '*.toml' '*.md' '*.lock')
-          foreach ($file in $files) {
-            $bytes = [IO.File]::ReadAllBytes((Join-Path $PWD $file))
-            for ($i = 0; $i -lt ($bytes.Length - 1); $i++) {
-              if ($bytes[$i] -eq 13 -and $bytes[$i + 1] -eq 10) {
-                throw "CRLF found in package canonical source: $file"
-              }
+          $lines = @(git ls-files --eol -- '*.phy' '*.toml' '*.md' '*.lock')
+          if ($LASTEXITCODE -ne 0) {
+            throw "git ls-files --eol failed with exit code $LASTEXITCODE"
+          }
+          foreach ($line in $lines) {
+            $columns = @($line -split '\s+', 3)
+            if ($columns.Count -lt 2) {
+              throw "Unexpected git ls-files --eol output: $line"
+            }
+            $indexEol = $columns[0]
+            $worktreeEol = $columns[1]
+            if ($indexEol -in @('i/crlf', 'i/mixed')) {
+              throw "CRLF found in committed package source: $line"
+            }
+            if ($worktreeEol -in @('w/crlf', 'w/mixed')) {
+              throw "CRLF found in checked-out package source: $line"
             }
           }
       - name: Verify committed lock files
