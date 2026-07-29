@@ -6,7 +6,7 @@ $Root = (Resolve-Path -LiteralPath $Root).Path
 $required = @(
     'Deploy-To-GitHub-Windows10.ps1','Deploy-To-GitHub-Windows10.cmd',
     'Resume-GitHub-Deployment-Windows10.ps1','Resume-GitHub-Deployment-Windows10.cmd',
-    'Repair-Existing-GitHub-Deployment-Windows10.ps1','Repair-Existing-GitHub-Deployment-Windows10-R8.ps1',
+    'Repair-Existing-GitHub-Deployment-Windows10.ps1',
     'Build-Registry-Windows.ps1','Remove-Failed-Deployment.ps1','Remove-Failed-Deployment.cmd',
     'scripts\github\build-registry.sh',
     'scripts\github\build-registry.ps1','scripts\github\validate-package-pr.sh',
