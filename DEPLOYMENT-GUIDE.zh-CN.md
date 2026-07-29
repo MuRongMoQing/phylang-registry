@@ -57,6 +57,19 @@ Set-ExecutionPolicy -Scope Process Bypass
 完整回滚参数见 `docs/06-失败部署清理与回滚.md`。
 
 
-## 0.6.2-R5 Windows Git 初始化保护
+## 0.6.2-R6 Windows Git 与工作流监控保护
 
-R5 隔离系统和全局 Git 换行设置，并在远程仓库创建前失败时自动删除本次新建的 `.git`。详见 `HOTFIX-R5-README.zh-CN.md`。
+R6 保留 R5 的 Git 换行隔离，并修复新仓库工作流尚未出现时直接读取缺失 `headSha` 属性的问题。已推送后发生监控错误时保留与远程一致的配置；可运行 `Resume-GitHub-Deployment-Windows10.ps1` 继续验证。详见 `HOTFIX-R6-README.zh-CN.md`。
+## 0.6.2-R7 跨平台锁文件与验证门禁修复
+
+R7 修复真实 `windows-latest` 作业中包源码 CRLF/LF 差异导致 `phylang.lock` 的时间戳和 SHA-256 被重写的问题。包目录哈希和 `.phypkg` 现在使用跨平台规范化内容；`.gitattributes` 明确固定 `*.phy` 与 `*.lock` 为 LF。Pages 不再在 push 后直接部署，必须先通过 Linux 与 Windows 验证。现有 R5/R6 仓库使用 `Repair-Existing-GitHub-Deployment-Windows10.ps1` 做普通快进修复。详见 `HOTFIX-R7-README.zh-CN.md`。
+
+
+## 0.6.2-R8 已提交临时备份清理修复
+
+R8 识别 R5 推送后清理留下的两个已知 `.phylang-deployment-backup` 删除项，不再把它们误判为用户修改；修复提交会从仓库历史当前版本中移除这些临时文件，并通过 `.gitignore` 阻止再次提交。详见 `HOTFIX-R8-README.zh-CN.md`。
+
+
+## R9：HTTPS/TLS 推送恢复
+
+R9 在修改仓库前先执行只读 Git HTTPS 测试，并对明确的传输中断进行有限重试。若提交已创建但推送失败，提交会保留，可运行 `Resume-R9-Repair-Push-Windows10.ps1` 继续。禁止使用 `http.sslVerify=false`。

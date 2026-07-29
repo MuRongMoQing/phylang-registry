@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type SemVersion struct {
@@ -799,36 +801,51 @@ func PackPackage(dir, out string) (string, error) {
 		return "", e
 	}
 	zw := zip.NewWriter(f)
-	e = filepath.Walk(m.RootDir, func(path string, info os.FileInfo, e error) error {
-		if e != nil {
-			return e
+	var files []string
+	e = filepath.Walk(m.RootDir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
 		if info.IsDir() {
 			return nil
 		}
-		rel, _ := filepath.Rel(m.RootDir, path)
+		rel, relErr := filepath.Rel(m.RootDir, path)
+		if relErr != nil {
+			return relErr
+		}
 		rel = filepath.ToSlash(rel)
 		if strings.HasPrefix(rel, "build/") || strings.HasPrefix(rel, ".git/") || strings.HasSuffix(rel, ".phypkg") {
 			return nil
 		}
-		h, e := zip.FileInfoHeader(info)
-		if e != nil {
-			return e
-		}
-		h.Name = filepath.ToSlash(filepath.Join(m.Name+"-"+m.Version, rel))
-		h.Method = zip.Deflate
-		w, e := zw.CreateHeader(h)
-		if e != nil {
-			return e
-		}
-		in, e := os.Open(path)
-		if e != nil {
-			return e
-		}
-		defer in.Close()
-		_, e = io.Copy(w, in)
-		return e
+		files = append(files, rel)
+		return nil
 	})
+	if e == nil {
+		sort.Strings(files)
+		archiveTime := time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
+		for _, rel := range files {
+			content, readErr := canonicalPackageFileBytes(filepath.Join(m.RootDir, filepath.FromSlash(rel)))
+			if readErr != nil {
+				e = readErr
+				break
+			}
+			h := &zip.FileHeader{
+				Name:     filepath.ToSlash(filepath.Join(m.Name+"-"+m.Version, rel)),
+				Method:   zip.Store,
+				Modified: archiveTime,
+			}
+			h.SetMode(0644)
+			w, createErr := zw.CreateHeader(h)
+			if createErr != nil {
+				e = createErr
+				break
+			}
+			if _, writeErr := w.Write(content); writeErr != nil {
+				e = writeErr
+				break
+			}
+		}
+	}
 	ce := zw.Close()
 	fe := f.Close()
 	if e == nil {
@@ -839,6 +856,7 @@ func PackPackage(dir, out string) (string, error) {
 	}
 	return out, e
 }
+
 func (pm *PackageManager) List() ([]*PackageManifest, error) {
 	var out []*PackageManifest
 	seen := map[string]bool{}
@@ -952,6 +970,22 @@ verify ExampleLaw with { distance=10 m; duration=5 s; rate=2 [m/s]; };
 	readme := fmt.Sprintf("# %s\n\nPhyLang 社区扩展包。\n", name)
 	return os.WriteFile(filepath.Join(dir, "README.md"), []byte(readme), 0644)
 }
+func canonicalPackageFileBytes(path string) ([]byte, error) {
+	b, e := os.ReadFile(path)
+	if e != nil {
+		return nil, e
+	}
+	// Package source and metadata are UTF-8 text. Git may check them out as
+	// CRLF on Windows unless every extension is explicitly covered by
+	// .gitattributes. Hash and archive the canonical LF representation so the
+	// same package has the same identity on Windows, Linux and macOS. Binary
+	// files are left byte-for-byte unchanged.
+	if utf8.Valid(b) && !bytes.Contains(b, []byte{0}) {
+		b = bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+	}
+	return b, nil
+}
+
 func hashPackageDirectory(root string) (string, error) {
 	var files []string
 	err := filepath.Walk(root, func(path string, info os.FileInfo, e error) error {
@@ -977,7 +1011,7 @@ func hashPackageDirectory(root string) (string, error) {
 	for _, rel := range files {
 		h.Write([]byte(rel))
 		h.Write([]byte{0})
-		b, e := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		b, e := canonicalPackageFileBytes(filepath.Join(root, filepath.FromSlash(rel)))
 		if e != nil {
 			return "", e
 		}

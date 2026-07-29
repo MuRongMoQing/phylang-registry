@@ -5,6 +5,8 @@ $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path -LiteralPath $Root).Path
 $required = @(
     'Deploy-To-GitHub-Windows10.ps1','Deploy-To-GitHub-Windows10.cmd',
+    'Resume-GitHub-Deployment-Windows10.ps1','Resume-GitHub-Deployment-Windows10.cmd',
+    'Repair-Existing-GitHub-Deployment-Windows10.ps1','Repair-Existing-GitHub-Deployment-Windows10-R8.ps1',
     'Build-Registry-Windows.ps1','Remove-Failed-Deployment.ps1','Remove-Failed-Deployment.cmd',
     'scripts\github\build-registry.sh',
     'scripts\github\build-registry.ps1','scripts\github\validate-package-pr.sh',
@@ -13,7 +15,8 @@ $required = @(
     '.github\workflows\integrity.yml','.github\workflows\release.yml',
     'tools\windows-x64\phylang.exe','tools\windows-arm64\phylang.exe',
     'runtime\portable-go\go.mod','runtime\portable-go\registry.go',
-    'runtime\portable-go\registry_path_test.go','runtime\portable-go\package_test.go','registry-hosting.json'
+    'runtime\portable-go\registry_path_test.go','runtime\portable-go\package_test.go',
+    'runtime\portable-go\package_cross_platform_determinism_test.go','registry-hosting.json'
 )
 $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $Root $_)) })
 if ($missing.Count -gt 0) { throw "Deployment files missing:`n$($missing -join "`n")" }
@@ -149,14 +152,70 @@ $deployText = [IO.File]::ReadAllText((Join-Path $Root 'Deploy-To-GitHub-Windows1
 foreach ($requiredFragment in @(
     "'config','core.eol','lf'",
     "'-c','core.safecrlf=false'",
-    '-RemoveLocalGitRepository -ConfirmLocalPath $root'
+    '-RemoveLocalGitRepository -ConfirmLocalPath $root',
+    '"head_sha=$HeadSha"',
+    ("repos/`$Repository/actions/workflows/`$Workflow/runs"),
+    ('$null -ne $response.PSObject.Properties[' + "'workflow_runs'" + ']'),
+    '$pushCompleted = $true'
 )) {
     if ($deployText.IndexOf($requiredFragment, [StringComparison]::Ordinal) -lt 0) {
         throw "Deployment script is missing required Git EOL/rollback protection: $requiredFragment"
     }
 }
+
+$gitignoreText = [IO.File]::ReadAllText((Join-Path $Root '.gitignore'), $utf8Strict)
+foreach ($requiredIgnore in @('/.phylang-deployment-backup/','/.phylang-r*-repair-backup/','/.phylang-r9-network-diagnostics/','/deployment-report.json')) {
+    if (($gitignoreText -split "`r?`n") -notcontains $requiredIgnore) {
+        throw "Missing deployment-residue ignore rule: $requiredIgnore"
+    }
+}
+$repairText = [IO.File]::ReadAllText((Join-Path $Root 'Repair-Existing-GitHub-Deployment-Windows10.ps1'), $utf8Strict)
+foreach ($repairFragment in @(
+    '.phylang-deployment-backup/CODEOWNERS',
+    '.phylang-deployment-backup/registry-hosting.json',
+    "`$status -in @(' D','D ')",
+    "'reset','--mixed',`$OriginalHead",
+    "'HOTFIX-R8-README.zh-CN.md'",
+    "'HOTFIX-R9-README.zh-CN.md'",
+    "'Resume-R9-Repair-Push-Windows10.ps1'",
+    "'Diagnose-GitHub-HTTPS-TLS-Windows10.ps1'",
+    "'.gitignore'"
+)) {
+    if ($repairText.IndexOf($repairFragment,[StringComparison]::Ordinal) -lt 0) {
+        throw "R9 known-residue/transport-preservation repair guard missing: $repairFragment"
+    }
+}
+
 $attributesText = [IO.File]::ReadAllText((Join-Path $Root '.gitattributes'), $utf8Strict)
 if ($attributesText -notmatch '(?m)^\.gitattributes text eol=lf$') {
     throw '.gitattributes must explicitly normalize itself to LF.'
 }
-Write-Host '[PASS] Windows deployment package layout, encoding, UTF-8 JSON decoding, native-path registry access, relative package resolution, Git EOL isolation, automatic local-Git rollback and PowerShell syntax.'
+if ($deployText -match '\._?headSha\s*-eq') { throw 'Unsafe direct headSha property filter remains in deployment script.' }
+if ($deployText -match "'run','list'") { throw 'Deployment script must use the workflow-runs REST endpoint instead of gh run list.' }
+if ($attributesText -notmatch '(?m)^\*\.phy text eol=lf$') {
+    throw '.gitattributes must force PhyLang source files to LF.'
+}
+if ($attributesText -notmatch '(?m)^\*\.lock text eol=lf$') {
+    throw '.gitattributes must force lock files to LF.'
+}
+$packageSource = [IO.File]::ReadAllText((Join-Path $Root 'runtime\portable-go\package.go'), $utf8Strict)
+foreach ($fragment in @('canonicalPackageFileBytes','bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))','Method:   zip.Store')) {
+    if ($packageSource.IndexOf($fragment,[StringComparison]::Ordinal) -lt 0) {
+        throw "Cross-platform package determinism fix missing: $fragment"
+    }
+}
+$deployWorkflow = [IO.File]::ReadAllText((Join-Path $Root '.github\workflows\deploy.yml'), $utf8Strict)
+if ($deployWorkflow -match '(?m)^\s+push:\s*$') {
+    throw 'Pages workflow must not deploy directly on push before validation succeeds.'
+}
+if ($deployWorkflow -notmatch 'Verify source commit already passed validation') {
+    throw 'Pages workflow validation gate is missing.'
+}
+$repairR9Text = [IO.File]::ReadAllText((Join-Path $Root 'Repair-Existing-GitHub-Deployment-Windows10.ps1'), $utf8Strict)
+foreach ($fragment in @('Select-GitTransportMode','Push-WithRetry','The local repair commit was preserved','http.sslBackend=schannel')) {
+    if ($repairR9Text.IndexOf($fragment,[StringComparison]::Ordinal) -lt 0) { throw "R9 transport recovery guard missing: $fragment" }
+}
+foreach ($requiredR9File in @('Resume-R9-Repair-Push-Windows10.ps1','Diagnose-GitHub-HTTPS-TLS-Windows10.ps1','HOTFIX-R9-README.zh-CN.md')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $Root $requiredR9File) -PathType Leaf)) { throw "R9 file missing: $requiredR9File" }
+}
+Write-Host '[PASS] Windows deployment package layout, encoding, UTF-8 JSON decoding, native-path registry access, relative package resolution, cross-platform lock/archive determinism, validation-gated Pages deployment, Git EOL isolation, workflow diagnostics, known R5 backup-residue cleanup, repair workflow, original-HEAD rollback, TLS transport diagnostics, retryable push preservation and PowerShell syntax.'

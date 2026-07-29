@@ -3,3 +3,9 @@
 /phylang.exe
 *.tmp
 .DS_Store
+/.phylang-deployment-backup/
+/.phylang-r*-repair-backup/
+/deployment-report.json
+
+/.phylang-r9-network-diagnostics/
+/github-tls-diagnostic-*.txt

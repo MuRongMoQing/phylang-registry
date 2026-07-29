@@ -17,6 +17,7 @@ $ApiVersion = '2026-03-10'
 $Utf8Strict = New-Object System.Text.UTF8Encoding -ArgumentList @($false, $true)
 $remoteCreatedByThisRun = $false
 $localGitCreatedByThisRun = $false
+$pushCompleted = $false
 
 function Write-Step {
     param([string]$Message)
@@ -106,25 +107,70 @@ function Configure-Pages {
     throw "Unable to create Pages site:`n$createText"
 }
 function Wait-Workflow {
-    param([string]$Workflow,[string]$HeadSha,[string]$Event,[int]$TimeoutMinutes = 25)
+    param(
+        [string]$Workflow,
+        [string]$HeadSha,
+        [string]$Event,
+        [int]$TimeoutMinutes = 25
+    )
     $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
     $runId = $null
+    $lastListing = ''
     while ((Get-Date) -lt $deadline) {
-        $arguments = @('run','list','--repo',$Repository,'--workflow',$Workflow,'--branch','main','--limit','20','--json','databaseId,headSha,status,conclusion,url,event,createdAt')
-        if ($Event) { $arguments += @('--event',$Event) }
+        # Query the official workflow-runs REST endpoint and filter server-side by
+        # head_sha. This avoids relying on gh run list objects having a headSha
+        # property while a new repository is still indexing its workflows.
+        $arguments = @(
+            'api','--method','GET',
+            "repos/$Repository/actions/workflows/$Workflow/runs",
+            '-H',"X-GitHub-Api-Version: $ApiVersion",
+            '-f','branch=main',
+            '-f',"head_sha=$HeadSha",
+            '-f','per_page=20'
+        )
+        if ($Event) { $arguments += @('-f',"event=$Event") }
         $listed = Invoke-Native -FilePath gh -Arguments $arguments -AllowedExitCodes @(0,1) -Capture
-        if ($listed.ExitCode -eq 0) {
-            $json = ($listed.Output -join "`n")
-            if ($json.Trim()) {
-                $runs = @($json | ConvertFrom-Json)
-                $run = $runs | Where-Object { $_.headSha -eq $HeadSha } | Sort-Object createdAt -Descending | Select-Object -First 1
-                if ($run) { $runId = [string]$run.databaseId; break }
+        $lastListing = ($listed.Output -join "`n")
+        if ($listed.ExitCode -eq 0 -and $lastListing.Trim()) {
+            try {
+                $response = $lastListing | ConvertFrom-Json
+                $runs = @()
+                if ($null -ne $response -and $null -ne $response.PSObject.Properties['workflow_runs']) {
+                    $runs = @($response.workflow_runs)
+                }
+                $candidates = @($runs | Where-Object {
+                    $null -ne $_ -and
+                    $null -ne $_.PSObject.Properties['id'] -and
+                    (-not $Event -or (
+                        $null -ne $_.PSObject.Properties['event'] -and
+                        [string]$_.event -eq $Event
+                    ))
+                })
+                $run = $candidates | Sort-Object created_at -Descending | Select-Object -First 1
+                if ($null -ne $run) {
+                    $runId = [string]$run.id
+                    $statusText = 'unknown'
+                    if ($null -ne $run.PSObject.Properties['status']) {
+                        $statusText = [string]$run.status
+                    }
+                    Write-Host "Found workflow run $runId ($Workflow, event=$Event, status=$statusText)."
+                    break
+                }
+            } catch {
+                Write-Warning "Workflow list is not ready; retrying: $($_.Exception.Message)"
             }
         }
         Start-Sleep -Seconds 5
     }
-    if (-not $runId) { throw "Workflow did not start within timeout: $Workflow" }
-    Invoke-Native -FilePath gh -Arguments @('run','watch',$runId,'--repo',$Repository,'--exit-status','--interval','5') | Out-Null
+    if (-not $runId) {
+        throw "Workflow did not start within timeout: $Workflow (commit=$HeadSha, event=$Event). Last gh output:`n$lastListing"
+    }
+    Invoke-Native -FilePath gh -Arguments @(
+        'run','watch',$runId,
+        '--repo',$Repository,
+        '--exit-status',
+        '--interval','5'
+    ) | Out-Null
 }
 
 try {
@@ -156,6 +202,9 @@ Write-Step 'Validate deployment package'
 
 $configPath = Join-Path $root 'registry-hosting.json'
 $backupRoot = Join-Path $root '.phylang-deployment-backup'
+# The backup directory is intentionally ignored by .gitignore so it can never be
+# included by the initial git add. It remains inside the package root only so the
+# existing rollback helper can restore configuration after a pre-push failure.
 Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
 Copy-Item -LiteralPath $configPath -Destination (Join-Path $backupRoot 'registry-hosting.json') -Force
@@ -212,7 +261,7 @@ foreach ($script in @('bootstrap.sh','scripts/github/build-registry.sh','scripts
     }
 }
 $staged = Invoke-Native -FilePath git -Arguments @('diff','--cached','--quiet') -AllowedExitCodes @(0,1) -Capture
-if ($staged.ExitCode -eq 1) { Invoke-Native -FilePath git -Arguments @('commit','-m','Deploy PhyLang Registry 0.6.2-R5') | Out-Null }
+if ($staged.ExitCode -eq 1) { Invoke-Native -FilePath git -Arguments @('commit','-m','Deploy PhyLang Registry 0.6.2-R8') | Out-Null }
 $head = ((Invoke-Native -FilePath git -Arguments @('rev-parse','HEAD') -Capture).Output -join '').Trim()
 
 Write-Step 'Create or select GitHub repository'
@@ -232,63 +281,22 @@ if (-not $exists) {
 Write-Step 'Configure GitHub Actions permissions'
 Invoke-Native -FilePath gh -Arguments @('api','--method','PUT',"repos/$Repository/actions/permissions/workflow",'-H',"X-GitHub-Api-Version: $ApiVersion",'-f','default_workflow_permissions=read','-F','can_approve_pull_request_reviews=false') | Out-Null
 
-# GitHub can reject Pages creation for a repository that does not yet have a pushed branch.
-# Try before push to avoid the first deploy race, but defer safely when the API returns 404/409/422.
-$pagesReadyBeforePush = Configure-Pages -AllowDeferred
-
+# Pages deployment is intentionally gated by validate.yml. The resume helper
+# configures and dispatches Pages only after Linux and Windows validation pass.
 Write-Step 'Push main branch'
 Invoke-Native -FilePath git -Arguments @('push','--set-upstream','origin','main') | Out-Null
-
-Write-Step 'Ensure GitHub Pages uses GitHub Actions'
-if (-not $pagesReadyBeforePush) {
-    $pagesDeadline = (Get-Date).AddMinutes(5)
-    $pagesConfigured = $false
-    while ((Get-Date) -lt $pagesDeadline) {
-        try {
-            $pagesConfigured = Configure-Pages
-            if ($pagesConfigured) { break }
-        } catch {
-            Write-Warning $_.Exception.Message
-        }
-        Start-Sleep -Seconds 5
-    }
-    if (-not $pagesConfigured) { throw 'GitHub Pages could not be configured after the first push.' }
-}
-
-# Always dispatch a post-configuration deployment. This prevents an initial push-triggered
-# deployment race from being treated as the authoritative deployment result. GitHub can take
-# a few seconds to index a newly pushed workflow, so retry the dispatch deterministically.
-$dispatchDeadline = (Get-Date).AddMinutes(5)
-$dispatched = $false
-while ((Get-Date) -lt $dispatchDeadline) {
-    $dispatch = Invoke-Native -FilePath gh -Arguments @('workflow','run','deploy.yml','--repo',$Repository,'--ref','main') -AllowedExitCodes @(0,1) -Capture
-    if ($dispatch.ExitCode -eq 0) { $dispatched = $true; break }
-    Start-Sleep -Seconds 5
-}
-if (-not $dispatched) { throw 'GitHub did not accept the post-configuration deploy workflow dispatch.' }
+$pushCompleted = $true
 
 if (-not $SkipWait) {
-    Write-Step 'Wait for Linux and Windows validation'
-    Wait-Workflow -Workflow 'validate.yml' -HeadSha $head -Event 'push' -TimeoutMinutes 25
-    Write-Step 'Wait for post-configuration GitHub Pages deployment'
-    Wait-Workflow -Workflow 'deploy.yml' -HeadSha $head -Event 'workflow_dispatch' -TimeoutMinutes 25
-    Write-Step 'Verify published health endpoint'
-    $healthUrl = "https://$owner.github.io/$repoName/health.json"
-    $deadline = (Get-Date).AddMinutes(10)
-    $health = $null
-    while ((Get-Date) -lt $deadline) {
-        try {
-            $health = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 20
-            if ($health.ok -eq $true) { break }
-        } catch {}
-        Start-Sleep -Seconds 10
-    }
-    if (-not $health -or $health.ok -ne $true) { throw "Pages health verification did not succeed: $healthUrl" }
+    Write-Step 'Wait for validation, then deploy validated commit to Pages'
+    & (Join-Path $root 'Resume-GitHub-Deployment-Windows10.ps1') -Repository $Repository -Commit $head
+} else {
+    Write-Warning "main was pushed but Pages was not dispatched because -SkipWait was used. Run: .\Resume-GitHub-Deployment-Windows10.ps1 -Repository '$Repository' -Commit '$head'"
 }
 
 $report = [ordered]@{
     version = '0.6.2'
-    deployment_package_revision = 'R5'
+    deployment_package_revision = 'R8'
     repository = $Repository
     commit = $head
     repository_url = "https://github.com/$Repository"
@@ -308,7 +316,14 @@ Write-Host "Pages:      $($report.pages_url)"
         if (Get-Variable root -ErrorAction SilentlyContinue) {
             $cleanupScript = Join-Path $root 'Remove-Failed-Deployment.ps1'
             if (Test-Path -LiteralPath $cleanupScript -PathType Leaf) {
-                if ($localGitCreatedByThisRun -and -not $remoteCreatedByThisRun) {
+                if ($pushCompleted) {
+                    # After a successful push, keep the configured tracked files in
+                    # sync with the remote branch. Only generated build output and the
+                    # temporary backup directory are removed.
+                    & $cleanupScript -Root $root -BuildArtifactsOnly
+                    Remove-Item -LiteralPath (Join-Path $root '.phylang-deployment-backup') -Recurse -Force -ErrorAction SilentlyContinue
+                    Write-Host '[PRESERVED] Local Git repository and deployed configuration because main was already pushed.' -ForegroundColor Yellow
+                } elseif ($localGitCreatedByThisRun -and -not $remoteCreatedByThisRun) {
                     & $cleanupScript -Root $root -RemoveLocalGitRepository -ConfirmLocalPath $root
                 } else {
                     & $cleanupScript -Root $root

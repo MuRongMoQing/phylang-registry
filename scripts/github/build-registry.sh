@@ -63,5 +63,5 @@ missing=[x for x in required if not (out/x).exists()]
 if missing:
     raise SystemExit(f'missing generated files: {missing}')
 PY
-printf '%s\n' "Built by PhyLang Community 0.6.2" > "$OUT/BUILD-INFO.txt"
+printf '%s\n' "Built by PhyLang Community 0.6.2-R7" > "$OUT/BUILD-INFO.txt"
 echo "[PASS] GitHub registry site: $OUT"

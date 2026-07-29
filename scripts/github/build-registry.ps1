@@ -111,7 +111,7 @@ $lines = foreach ($pkg in Get-ChildItem -LiteralPath (Join-Path $out 'packages')
     "$hash  packages/$($pkg.Name)"
 }
 [IO.File]::WriteAllText((Join-Path $out 'SHA256SUMS.txt'),(($lines -join "`n") + "`n"),(New-Object Text.ASCIIEncoding))
-[IO.File]::WriteAllText((Join-Path $out 'BUILD-INFO.txt'),"Built by PhyLang Community 0.6.2-R4`n",(New-Object Text.UTF8Encoding($false)))
+[IO.File]::WriteAllText((Join-Path $out 'BUILD-INFO.txt'),"Built by PhyLang Community 0.6.2-R7`n",(New-Object Text.UTF8Encoding($false)))
 foreach ($required in @('index.json','health.json','registry-hosting.json','SHA256SUMS.txt','index.schema.json','manifest.schema.json','.nojekyll')) {
     if (-not (Test-Path -LiteralPath (Join-Path $out $required) -PathType Leaf)) { throw "Generated file missing: $required" }
 }

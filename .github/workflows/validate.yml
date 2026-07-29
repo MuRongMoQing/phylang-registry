@@ -58,6 +58,18 @@ jobs:
       - name: Build runtime and registry on Windows
         shell: powershell
         run: .\Build-Registry-Windows.ps1 -OutDirectory build\pages-windows -Repository $env:GITHUB_REPOSITORY -PagesUrl 'https://example.invalid/registry/' -BuildRuntimeWithGo
+      - name: Verify package source and lock line endings
+        shell: powershell
+        run: |
+          $files = @(git ls-files -- '*.phy' '*.toml' '*.md' '*.lock')
+          foreach ($file in $files) {
+            $bytes = [IO.File]::ReadAllBytes((Join-Path $PWD $file))
+            for ($i = 0; $i -lt ($bytes.Length - 1); $i++) {
+              if ($bytes[$i] -eq 13 -and $bytes[$i + 1] -eq 10) {
+                throw "CRLF found in package canonical source: $file"
+              }
+            }
+          }
       - name: Verify committed lock files
         shell: powershell
         run: git diff --exit-code -- ':(glob)**/phylang.lock'
