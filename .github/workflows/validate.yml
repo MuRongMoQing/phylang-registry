@@ -1,0 +1,70 @@
+name: Validate registry packages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: registry-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux validation and Actions simulation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23.x'
+          cache-dependency-path: runtime/portable-go/go.mod
+      - name: Run simulated GitHub Actions steps
+        shell: bash
+        run: bash ./scripts/github/simulate-actions.sh
+      - name: Simulate Git for Windows global CRLF policy
+        shell: bash
+        run: bash ./scripts/github/simulate-windows-git-eol.sh
+      - name: Verify committed lock files
+        shell: bash
+        run: git diff --exit-code -- ':(glob)**/phylang.lock'
+
+  windows:
+    name: Windows PowerShell and native runtime validation
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23.x'
+          cache-dependency-path: runtime/portable-go/go.mod
+      - name: Validate PowerShell scripts and package layout
+        shell: powershell
+        run: .\Test-Deployment-Package.ps1 -Root $PWD -RunRuntimeSelfTest
+      - name: Build runtime and registry on Windows
+        shell: powershell
+        run: .\Build-Registry-Windows.ps1 -OutDirectory build\pages-windows -Repository $env:GITHUB_REPOSITORY -PagesUrl 'https://example.invalid/registry/' -BuildRuntimeWithGo
+      - name: Verify committed lock files
+        shell: powershell
+        run: git diff --exit-code -- ':(glob)**/phylang.lock'
+      - name: Verify failed-build cleanup helper
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path build\cleanup-self-test -Force | Out-Null
+          Set-Content -LiteralPath build\cleanup-self-test\partial.txt -Value partial -Encoding ASCII
+          .\Remove-Failed-Deployment.ps1 -Root $PWD -BuildArtifactsOnly
+          if (Test-Path -LiteralPath build) { throw 'Cleanup helper did not remove build artifacts.' }

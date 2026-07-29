@@ -1,0 +1,3 @@
+import community.units.astronomy;
+print 1 AU in km;
+print 1 parsec in lightyear;

@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "generated": "2026-07-28T11:14:53Z",
+  "packages": [
+    {
+      "name": "physics.classical",
+      "version": "1.0.0",
+      "source": ".",
+      "sha256": "66ab0b0b16cc595c5ed83587cdbbd579c12d66ba47eb01abb129182eaf8f4903",
+      "dependencies": {}
+    }
+  ]
+}

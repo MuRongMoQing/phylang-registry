@@ -1,0 +1,5 @@
+/.github/workflows/ @MuRongMoQing
+/community-registry/schema/ @MuRongMoQing
+/runtime/portable-go/registry*.go @MuRongMoQing
+/community-packages/ @MuRongMoQing
+/stdlib/packages/ @MuRongMoQing

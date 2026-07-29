@@ -1,0 +1,3 @@
+import physics.classical;
+verify NewtonSecondLaw with { force=6 N; mass=2 kg; acceleration=3 [m/s^2]; };
+print c in [m/s];

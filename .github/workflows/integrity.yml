@@ -1,0 +1,52 @@
+name: Check published registry integrity
+
+on:
+  workflow_run:
+    workflows: ['Deploy registry to GitHub Pages']
+    types: [completed]
+  schedule:
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23.x'
+          cache-dependency-path: runtime/portable-go/go.mod
+      - name: Build client
+        shell: bash
+        run: cd runtime/portable-go && go build -trimpath -o ../../phylang .
+      - name: Wait for published index
+        shell: bash
+        env:
+          REGISTRY_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/index.json
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --location "$REGISTRY_URL" -o /tmp/index.json; then exit 0; fi
+            echo "Registry not ready: attempt $attempt/30"
+            sleep 10
+          done
+          exit 1
+      - name: Validate published registry
+        shell: bash
+        env:
+          REGISTRY_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/index.json
+          HOME: ${{ runner.temp }}/phylang-home
+        run: |
+          mkdir -p "$HOME"
+          ./phylang package registry add published "$REGISTRY_URL"
+          ./phylang package registry check published
+          ./phylang package search ""

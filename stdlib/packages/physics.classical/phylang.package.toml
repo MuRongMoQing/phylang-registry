@@ -1,0 +1,32 @@
+[package]
+name = "physics.classical"
+version = "1.0.0"
+description = "PhyLang 经典力学基础规律与常量"
+license = "MIT"
+authors = ["PhyLang Community"]
+repository = "https://example.invalid/phylang/physics.classical"
+entry = "src/package.phy"
+namespace = "physics_classical"
+phylang = ">=0.6.0 <0.7.0"
+keywords = ["physics", "mechanics", "si"]
+readme = "README.md"
+
+[dependencies]
+
+[exports]
+quantities = []
+units = []
+laws = ["NewtonSecondLaw"]
+functions = []
+constants = ["c", "g0"]
+
+[tests]
+files = ["tests/basic.phy"]
+
+[metadata]
+status = "standard-library"
+stability = "stable"
+
+[tool.phylang.community]
+category = "mechanics"
+contribution = "standard"

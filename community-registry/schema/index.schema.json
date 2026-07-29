@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phylang.org/schema/registry-index-v2.json",
+  "title": "PhyLang community registry index v2",
+  "type": "object",
+  "required": ["schema", "name", "updated", "packages"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"enum": ["phylang.registry/v1", "phylang.registry/v2"]},
+    "name": {"type": "string", "minLength": 1},
+    "updated": {"type": "string", "format": "date-time"},
+    "description": {"type": "string"},
+    "repository": {"type": "string", "format": "uri"},
+    "base_url": {"type": "string", "format": "uri"},
+    "generated_by": {"type": "string"},
+    "packages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "versions"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$"},
+          "description": {"type": "string"},
+          "repository": {"type": "string"},
+          "keywords": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["version", "url", "sha256", "phylang"],
+              "additionalProperties": false,
+              "properties": {
+                "version": {"type": "string"},
+                "url": {"type": "string"},
+                "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+                "phylang": {"type": "string"},
+                "published": {"type": "string", "format": "date-time"},
+                "size": {"type": "integer", "minimum": 0},
+                "yanked": {"type": "boolean"},
+                "release_url": {"type": "string", "format": "uri"},
+                "attestation_url": {"type": "string", "format": "uri"},
+                "sbom_url": {"type": "string", "format": "uri"},
+                "source_commit": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phylang.org/schema/package-manifest-v1.json",
+  "title": "PhyLang package manifest logical schema",
+  "type": "object",
+  "required": ["package", "exports", "tests"],
+  "properties": {
+    "package": {
+      "type": "object",
+      "required": ["name", "version", "description", "license", "authors", "entry", "phylang"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+        "version": {"type": "string"},
+        "description": {"type": "string"},
+        "license": {"type": "string"},
+        "authors": {"type": "array", "items": {"type": "string"}},
+        "repository": {"type": "string"},
+        "homepage": {"type": "string"},
+        "entry": {"type": "string"},
+        "namespace": {"type": "string"},
+        "phylang": {"type": "string"},
+        "keywords": {"type": "array", "items": {"type": "string"}},
+        "readme": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "dependencies": {"type": "object"},
+    "exports": {
+      "type": "object",
+      "properties": {
+        "quantities": {"type": "array", "items": {"type": "string"}},
+        "units": {"type": "array", "items": {"type": "string"}},
+        "laws": {"type": "array", "items": {"type": "string"}},
+        "functions": {"type": "array", "items": {"type": "string"}},
+        "constants": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "tests": {
+      "type": "object",
+      "required": ["files"],
+      "properties": {"files": {"type": "array", "items": {"type": "string"}}},
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

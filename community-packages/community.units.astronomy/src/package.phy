@@ -1,0 +1,7 @@
+package community.units.astronomy {
+    version "1.0.0";
+    requires phylang ">=0.6.0 <0.7.0";
+}
+export unit AU : Length = 149597870700 m;
+export unit lightyear : Length = 9460730472580800 m;
+export unit parsec : Length = 3.0856775814913673e16 m;

@@ -1,0 +1,48 @@
+[package]
+name = "community.mechanics.linear-drag"
+version = "1.0.0"
+description = "一维线性阻力规律示例包"
+license = "MIT"
+authors = ["PhyLang Community"]
+repository = "https://example.invalid/phylang/community.mechanics.linear-drag"
+entry = "src/package.phy"
+namespace = "linear_drag"
+phylang = ">=0.6.0 <0.7.0"
+keywords = ["mechanics", "drag", "law"]
+readme = "README.md"
+
+[dependencies]
+physics.classical = "^1.0.0"
+
+[exports]
+quantities = ["DragCoefficient"]
+units = ["kg_per_s"]
+laws = ["LinearDragLaw"]
+functions = ["linear_drag_force"]
+constants = []
+
+[tests]
+files = ["tests/basic.phy"]
+
+
+[quantities.DragCoefficient]
+dimension = "Mass / Time"
+kind = "transport-coefficient"
+description = "一维线性阻力系数，力等于系数与速度乘积的相反数"
+since = "1.0.0"
+
+[units.kg_per_s]
+quantity = "DragCoefficient"
+symbol = "kg/s"
+definition = "1 [kg/s]"
+aliases = ["kilogram_per_second"]
+description = "线性阻力系数的 SI 单位"
+since = "1.0.0"
+
+[metadata]
+status = "community-example"
+review_level = "demonstration"
+
+[tool.phylang.community]
+category = "mechanics"
+contribution = "law"

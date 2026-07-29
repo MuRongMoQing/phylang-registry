@@ -1,0 +1,5 @@
+/build/
+/phylang
+/phylang.exe
+*.tmp
+.DS_Store

@@ -1,0 +1,8 @@
+package physics.classical {
+    version "1.0.0";
+    requires phylang ">=0.6.0 <0.7.0";
+    namespace physics_classical;
+}
+
+// NewtonSecondLaw、c 和 g0 由语言核心提供；本包为它们提供版本化包元数据和显式导出。
+export { NewtonSecondLaw, c, g0 };

@@ -1,0 +1,7 @@
+{
+    "repository":  "MuRongMoQing/phylang-registry",
+    "pages_base":  "https://MuRongMoQing.github.io/phylang-registry/",
+    "release_base":  "https://github.com/MuRongMoQing/phylang-registry/releases/download/",
+    "registry_name":  "phylang-community",
+    "description":  "PhyLang 0.6.2 community registry"
+}

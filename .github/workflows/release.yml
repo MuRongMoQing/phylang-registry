@@ -1,0 +1,55 @@
+name: Publish registry release
+
+on:
+  push:
+    tags: ['registry-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, for example registry-v2026.07.28'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23.x'
+          cache-dependency-path: runtime/portable-go/go.mod
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then tag="${GITHUB_REF_NAME}"; else tag="${{ inputs.tag }}"; fi
+          [[ "$tag" =~ ^registry-v[0-9]{4}\.[0-9]{2}\.[0-9]{2}([.-][A-Za-z0-9._-]+)?$ ]] || { echo "Invalid tag: $tag"; exit 2; }
+          echo "value=$tag" >> "$GITHUB_OUTPUT"
+      - name: Build release assets
+        shell: bash
+        run: |
+          bash ./scripts/github/build-registry.sh build/release-site "${GITHUB_REPOSITORY}" "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          tar -C build/release-site -czf "build/phylang-registry-${{ steps.tag.outputs.value }}.tar.gz" .
+          cp build/release-site/index.json "build/index-${{ steps.tag.outputs.value }}.json"
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          files=(build/registry-packages/*.phypkg "build/phylang-registry-$TAG.tar.gz" "build/index-$TAG.json")
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" --clobber
+          else
+            gh release create "$TAG" "${files[@]}" --title "PhyLang Registry $TAG" --generate-notes
+          fi

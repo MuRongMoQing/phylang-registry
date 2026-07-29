@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "generated": "2026-07-28T11:14:53Z",
+  "packages": [
+    {
+      "name": "community.units.astronomy",
+      "version": "1.0.0",
+      "source": ".",
+      "sha256": "3a0f5ba036a1a0adadb76191166114f435f623e68b29e3879d8b43332151d127",
+      "dependencies": {}
+    }
+  ]
+}

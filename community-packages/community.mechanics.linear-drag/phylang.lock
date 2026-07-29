@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "generated": "2026-07-28T11:14:53Z",
+  "packages": [
+    {
+      "name": "community.mechanics.linear-drag",
+      "version": "1.0.0",
+      "source": ".",
+      "sha256": "b11b916d305b2a42e2d716ee8a5d5fa2b3cb7c10ac530e6cd99160d2f6c8b824",
+      "dependencies": {
+        "physics.classical": "1.0.0"
+      }
+    },
+    {
+      "name": "physics.classical",
+      "version": "1.0.0",
+      "source": "package:physics.classical@1.0.0",
+      "sha256": "66ab0b0b16cc595c5ed83587cdbbd579c12d66ba47eb01abb129182eaf8f4903",
+      "dependencies": {}
+    }
+  ]
+}

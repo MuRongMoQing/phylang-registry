@@ -1,0 +1,56 @@
+[package]
+name = "community.units.astronomy"
+version = "1.0.0"
+description = "常用天文长度单位"
+license = "MIT"
+authors = ["PhyLang Community"]
+repository = "https://example.invalid/phylang/community.units.astronomy"
+entry = "src/package.phy"
+namespace = "astronomy_units"
+phylang = ">=0.6.0 <0.7.0"
+keywords = ["astronomy", "units"]
+readme = "README.md"
+
+[dependencies]
+
+[exports]
+quantities = []
+units = ["AU", "lightyear", "parsec"]
+laws = []
+functions = []
+constants = []
+
+[tests]
+files = ["tests/basic.phy"]
+
+
+[units.AU]
+quantity = "Length"
+symbol = "AU"
+definition = "149597870700 m"
+aliases = ["astronomical_unit"]
+description = "国际天文学联合会定义的天文单位"
+since = "1.0.0"
+
+[units.lightyear]
+quantity = "Length"
+symbol = "ly"
+definition = "9460730472580800 m"
+aliases = ["ly"]
+description = "光在真空中一个儒略年传播的距离"
+since = "1.0.0"
+
+[units.parsec]
+quantity = "Length"
+symbol = "pc"
+definition = "3.0856775814913673e16 m"
+aliases = ["pc"]
+description = "视差为一角秒时对应的距离"
+since = "1.0.0"
+
+[metadata]
+status = "community-example"
+
+[tool.phylang.community]
+category = "astronomy"
+contribution = "units"

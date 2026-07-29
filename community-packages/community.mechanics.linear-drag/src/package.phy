@@ -1,0 +1,25 @@
+package community.mechanics.linear-drag {
+    version "1.0.0";
+    requires phylang ">=0.6.0 <0.7.0";
+    namespace linear_drag;
+}
+import physics.classical;
+
+export quantity DragCoefficient : Mass / Time;
+export unit kg_per_s : DragCoefficient = 1 [kg/s];
+
+const sign_convention = -1;
+export fn linear_drag_force(coefficient, velocity) {
+    let force = sign_convention * coefficient * velocity;
+    return force;
+}
+
+export law LinearDragLaw {
+    parameters {
+        drag_force: Force;
+        coefficient: DragCoefficient;
+        velocity: Velocity;
+    }
+    assumptions { coefficient > 0 kg_per_s; }
+    equation { drag_force == -coefficient * velocity; }
+}
